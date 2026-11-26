@@ -2,6 +2,13 @@
 # For details: https://github.com/pylint-dev/pylint/blob/main/LICENSE
 # Copyright (c) https://github.com/pylint-dev/pylint/blob/main/CONTRIBUTORS.txt
 
+"""Tests for the run_pylint entry point.
+
+This module contains unit tests that exercise the run_pylint function,
+verifying its behavior for invalid or ambiguous command-line/config
+arguments.
+"""
+
 from pathlib import Path
 
 import pytest

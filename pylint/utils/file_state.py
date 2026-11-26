@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import collections
-from collections import defaultdict
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Dict, Literal
 
@@ -38,9 +37,7 @@ class FileState:
         self.base_name = modname
         self._module_msgs_state: MessageStateDict = {}
         self._raw_module_msgs_state: MessageStateDict = {}
-        self._ignored_msgs: defaultdict[
-            tuple[str, int], set[int]
-        ] = collections.defaultdict(set)
+        self._ignored_msgs: defaultdict[tuple[str, int], set[int]] = collections.defaultdict(set)
         self._suppression_mapping: dict[tuple[str, int], int] = {}
         self._module = node
         if node:
@@ -80,10 +77,7 @@ class FileState:
         #
         # this is necessary to disable locally messages applying to class /
         # function using their fromlineno
-        if (
-            isinstance(node, (nodes.Module, nodes.ClassDef, nodes.FunctionDef))
-            and node.body
-        ):
+        if isinstance(node, (nodes.Module, nodes.ClassDef, nodes.FunctionDef)) and node.body:
             firstchildlineno = node.body[0].fromlineno
         else:
             firstchildlineno = node.tolineno
@@ -143,14 +137,8 @@ class FileState:
                 # when parsing the states for a scoped node where some line-disables
                 # have already been parsed.
                 if (
-                    (
-                        isinstance(node, nodes.Module)
-                        and node.fromlineno <= line < lineno
-                    )
-                    or (
-                        not isinstance(node, nodes.Module)
-                        and node.fromlineno < line < lineno
-                    )
+                    (isinstance(node, nodes.Module) and node.fromlineno <= line < lineno)
+                    or (not isinstance(node, nodes.Module) and node.fromlineno < line < lineno)
                 ) and line in self._module_msgs_state.get(msg.msgid, ()):
                     continue
                 if line in lines:  # state change in the same block
@@ -192,9 +180,7 @@ class FileState:
         assert line > 0
         if scope != "line":
             # Expand the status to cover all relevant block lines
-            self._set_state_on_block_lines(
-                self._msgs_store, self._module, msg, {line: status}
-            )
+            self._set_state_on_block_lines(self._msgs_store, self._module, msg, {line: status})
         else:
             self._set_message_state_on_line(msg, line, status, line)
 
@@ -204,9 +190,7 @@ class FileState:
         except KeyError:
             self._raw_module_msgs_state[msg.msgid] = {line: status}
 
-    def handle_ignored_message(
-        self, state_scope: Literal[0, 1, 2] | None, msgid: str, line: int | None
-    ) -> None:
+    def handle_ignored_message(self, state_scope: Literal[0, 1, 2] | None, msgid: str, line: int | None) -> None:
         """Report an ignored message.
 
         state_scope is either MSG_STATE_SCOPE_MODULE or MSG_STATE_SCOPE_CONFIG,
@@ -239,15 +223,17 @@ class FileState:
                     and (warning, line) not in self._ignored_msgs
                     and warning not in INCOMPATIBLE_WITH_USELESS_SUPPRESSION
                 ):
-                    yield "useless-suppression", line, (
-                        msgs_store.get_msg_display_string(warning),
-                    )
+                    yield "useless-suppression", line, (msgs_store.get_msg_display_string(warning),)
         # don't use iteritems here, _ignored_msgs may be modified by add_message
         for (warning, from_), ignored_lines in list(self._ignored_msgs.items()):
             for line in ignored_lines:
-                yield "suppressed-message", line, (
-                    msgs_store.get_msg_display_string(warning),
-                    from_,
+                yield (
+                    "suppressed-message",
+                    line,
+                    (
+                        msgs_store.get_msg_display_string(warning),
+                        from_,
+                    ),
                 )
 
     def get_effective_max_line_number(self) -> int | None:

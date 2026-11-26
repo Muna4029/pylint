@@ -2,6 +2,12 @@
 # For details: https://github.com/pylint-dev/pylint/blob/main/LICENSE
 # Copyright (c) https://github.com/pylint-dev/pylint/blob/main/CONTRIBUTORS.txt
 
+"""Tests for the similar/duplicate-code checker.
+
+This module contains unit tests exercising pylint's duplicate-code (similar
+lines) detection and related ignore/disable behaviour.
+"""
+
 from __future__ import annotations
 
 import os

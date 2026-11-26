@@ -16,7 +16,7 @@ from astroid import nodes, objects, util
 
 from pylint import utils as lint_utils
 from pylint.checkers import BaseChecker, utils
-from pylint.interfaces import HIGH, INFERENCE, Confidence
+from pylint.interfaces import HIGH, INFERENCE
 from pylint.reporters.ureports import nodes as reporter_nodes
 from pylint.utils import LinterStats
 
@@ -85,13 +85,13 @@ def report_by_type_stats(
     for node_type in ("module", "class", "method", "function"):
         node_type = cast(Literal["function", "class", "method", "module"], node_type)
         new = stats.get_node_count(node_type)
-        old = old_stats.get_node_count(node_type) if old_stats else None
-        diff_str = lint_utils.diff_string(old, new) if old else None
+        old = old_stats.get_node_count(node_type) if old_stats is not None else None
+        diff_str = lint_utils.diff_string(old, new) if old is not None else None
         lines += [
             node_type,
             str(new),
-            str(old) if old else "NC",
-            diff_str if diff_str else "NC",
+            str(old) if old is not None else "NC",
+            diff_str if diff_str is not None else "NC",
             nice_stats[node_type].get("percent_documented", "0"),
             nice_stats[node_type].get("percent_badname", "0"),
         ]
@@ -117,14 +117,12 @@ class BasicChecker(_BasicChecker):
         "W0101": (
             "Unreachable code",
             "unreachable",
-            'Used when there is some code behind a "return" or "raise" '
-            "statement, which will never be accessed.",
+            'Used when there is some code behind a "return" or "raise" statement, which will never be accessed.',
         ),
         "W0102": (
             "Dangerous default value %s as argument",
             "dangerous-default-value",
-            "Used when a mutable value as list or dictionary is detected in "
-            "a default value for an argument.",
+            "Used when a mutable value as list or dictionary is detected in a default value for an argument.",
         ),
         "W0104": (
             "Statement seems to have no effect",
@@ -281,21 +279,15 @@ class BasicChecker(_BasicChecker):
         self._trys = []
         self.linter.stats.reset_node_count()
 
-    @utils.only_required_for_messages(
-        "using-constant-test", "missing-parentheses-for-call-in-test"
-    )
+    @utils.only_required_for_messages("using-constant-test", "missing-parentheses-for-call-in-test")
     def visit_if(self, node: nodes.If) -> None:
         self._check_using_constant_test(node, node.test)
 
-    @utils.only_required_for_messages(
-        "using-constant-test", "missing-parentheses-for-call-in-test"
-    )
+    @utils.only_required_for_messages("using-constant-test", "missing-parentheses-for-call-in-test")
     def visit_ifexp(self, node: nodes.IfExp) -> None:
         self._check_using_constant_test(node, node.test)
 
-    @utils.only_required_for_messages(
-        "using-constant-test", "missing-parentheses-for-call-in-test"
-    )
+    @utils.only_required_for_messages("using-constant-test", "missing-parentheses-for-call-in-test")
     def visit_comprehension(self, node: nodes.Comprehension) -> None:
         if node.ifs:
             for if_test in node.ifs:
@@ -333,9 +325,7 @@ class BasicChecker(_BasicChecker):
         maybe_generator_call = None
         if not isinstance(test, except_nodes):
             inferred = utils.safe_infer(test)
-            if isinstance(inferred, util.UninferableBase) and isinstance(
-                test, nodes.Name
-            ):
+            if isinstance(inferred, util.UninferableBase) and isinstance(test, nodes.Name):
                 emit, maybe_generator_call = BasicChecker._name_holds_generator(test)
 
         # Emit if calling a function that only returns GeneratorExp (always tests True)
@@ -353,9 +343,7 @@ class BasicChecker(_BasicChecker):
                         break
                     all_returns_were_generator = True
                 if all_returns_were_generator:
-                    self.add_message(
-                        "using-constant-test", node=node, confidence=INFERENCE
-                    )
+                    self.add_message("using-constant-test", node=node, confidence=INFERENCE)
                     return
 
         if emit:
@@ -420,7 +408,7 @@ class BasicChecker(_BasicChecker):
         """Check module name, docstring and redefinition
         increment branch counter.
         """
-        self.linter.stats.node_count["klass"] += 1
+        self.linter.stats.node_count["class"] += 1
 
     @utils.only_required_for_messages(
         "pointless-statement",
@@ -446,9 +434,7 @@ class BasicChecker(_BasicChecker):
                     if (
                         sibling is not None
                         and sibling.scope() is scope
-                        and isinstance(
-                            sibling, (nodes.Assign, nodes.AnnAssign, nodes.TypeAlias)
-                        )
+                        and isinstance(sibling, (nodes.Assign, nodes.AnnAssign, nodes.TypeAlias))
                     ):
                         return
             self.add_message("pointless-string-statement", node=node)
@@ -467,9 +453,7 @@ class BasicChecker(_BasicChecker):
             # For more details, see: https://github.com/pylint-dev/pylint/issues/8073
             inferred = utils.safe_infer(expr) if name[:1].isupper() else None
             if isinstance(inferred, objects.ExceptionInstance):
-                self.add_message(
-                    "pointless-exception-statement", node=node, confidence=INFERENCE
-                )
+                self.add_message("pointless-exception-statement", node=node, confidence=INFERENCE)
             return
 
         # Ignore if this is :
@@ -480,48 +464,44 @@ class BasicChecker(_BasicChecker):
         # side effects), else pointless-statement
         if (
             isinstance(expr, (nodes.Yield, nodes.Await))
-            or (
-                isinstance(node.parent, (nodes.Try, nodes.TryStar))
-                and node.parent.body == [node]
-            )
+            or (isinstance(node.parent, (nodes.Try, nodes.TryStar)) and node.parent.body == [node])
             or (isinstance(expr, nodes.Const) and expr.value is Ellipsis)
         ):
             return
         if isinstance(expr, nodes.NamedExpr):
             self.add_message("named-expr-without-context", node=node, confidence=HIGH)
         elif any(expr.nodes_of_class(nodes.Call)):
-            self.add_message(
-                "expression-not-assigned", node=node, args=expr.as_string()
-            )
+            self.add_message("expression-not-assigned", node=node, args=expr.as_string())
         else:
             self.add_message("pointless-statement", node=node)
 
     @staticmethod
-    def _filter_vararg(
-        node: nodes.Lambda, call_args: list[nodes.NodeNG]
-    ) -> Iterator[nodes.NodeNG]:
+    def _filter_vararg(node: nodes.Lambda, call_args: list[nodes.NodeNG]) -> Iterator[nodes.NodeNG]:
         # Return the arguments for the given call which are
         # not passed as vararg.
         for arg in call_args:
             if isinstance(arg, nodes.Starred):
-                if (
-                    isinstance(arg.value, nodes.Name)
-                    and arg.value.name != node.args.vararg
-                ):
+                if isinstance(arg.value, nodes.Name) and arg.value.name != node.args.vararg:
                     yield arg
             else:
                 yield arg
 
     @staticmethod
-    def _has_variadic_argument(
-        args: list[nodes.Starred | nodes.Keyword], variadic_name: str
-    ) -> bool:
-        return not args or any(
-            isinstance(a.value, nodes.Name)
-            and a.value.name != variadic_name
-            or not isinstance(a.value, nodes.Name)
-            for a in args
-        )
+    def _has_variadic_argument(args: list[nodes.Starred | nodes.Keyword], variadic_name: str) -> bool:
+        # Return True if any argument corresponds to the variadic parameter name.
+        # For a Starred argument, check if its value is a Name matching variadic_name.
+        # For a Keyword argument, check if its arg equals variadic_name.
+        if not args:
+            return False
+        for a in args:
+            # astroid Starred nodes represent *args; Keyword nodes represent keyword args
+            if isinstance(a, nodes.Starred):
+                if isinstance(a.value, nodes.Name) and a.value.name == variadic_name:
+                    return True
+            elif isinstance(a, nodes.Keyword):
+                if a.arg == variadic_name:
+                    return True
+        return False
 
     @utils.only_required_for_messages("unnecessary-lambda")
     def visit_lambda(self, node: nodes.Lambda) -> None:
@@ -541,9 +521,7 @@ class BasicChecker(_BasicChecker):
             # The body of the lambda must be a function call expression
             # for the lambda to be unnecessary.
             return
-        if isinstance(node.body.func, nodes.Attribute) and isinstance(
-            node.body.func.expr, nodes.Call
-        ):
+        if isinstance(node.body.func, nodes.Attribute) and isinstance(node.body.func.expr, nodes.Call):
             # Chained call, the intermediate call might
             # return something else (but we don't check that, yet).
             return
@@ -609,10 +587,7 @@ class BasicChecker(_BasicChecker):
             except astroid.InferenceError:
                 continue
 
-            if (
-                isinstance(value, astroid.Instance)
-                and value.qname() in DEFAULT_ARGUMENT_SYMBOLS
-            ):
+            if isinstance(value, astroid.Instance) and value.qname() in DEFAULT_ARGUMENT_SYMBOLS:
                 if value is default:
                     msg = DEFAULT_ARGUMENT_SYMBOLS[value.qname()]
                 elif isinstance(value, astroid.Instance) or is_iterable(value):
@@ -690,10 +665,7 @@ class BasicChecker(_BasicChecker):
             call_expr = call_node.func.expr
             if not isinstance(call_expr, nodes.Call):
                 return
-            if (
-                isinstance(call_expr.func, nodes.Name)
-                and call_expr.func.name == "print"
-            ):
+            if isinstance(call_expr.func, nodes.Name) and call_expr.func.name == "print":
                 self.add_message("misplaced-format-function", node=call_node)
 
     @utils.only_required_for_messages(
@@ -758,9 +730,7 @@ class BasicChecker(_BasicChecker):
             else:
                 continue
             if value in values:
-                self.add_message(
-                    "duplicate-value", node=node, args=value, confidence=HIGH
-                )
+                self.add_message("duplicate-value", node=node, args=value, confidence=HIGH)
             values.add(value)
 
     def visit_try(self, node: nodes.Try) -> None:
@@ -793,9 +763,7 @@ class BasicChecker(_BasicChecker):
                 unreachable_statement = unreachable_statement.next_sibling()
                 if unreachable_statement is None:
                     return
-            self.add_message(
-                "unreachable", node=unreachable_statement, confidence=confidence
-            )
+            self.add_message("unreachable", node=unreachable_statement, confidence=confidence)
 
     def _check_not_in_finally(
         self,
@@ -839,9 +807,7 @@ class BasicChecker(_BasicChecker):
                         func = next(node.args[0].func.infer())
                     except astroid.InferenceError:
                         return
-                    if getattr(
-                        func, "name", None
-                    ) == "iter" and utils.is_builtin_object(func):
+                    if getattr(func, "name", None) == "iter" and utils.is_builtin_object(func):
                         self.add_message("bad-reversed-sequence", node=node)
                 return
 
@@ -854,9 +820,7 @@ class BasicChecker(_BasicChecker):
             if not self._py38_plus and isinstance(argument, astroid.Instance):
                 if any(
                     ancestor.name == "dict" and utils.is_builtin_object(ancestor)
-                    for ancestor in itertools.chain(
-                        (argument._proxied,), argument._proxied.ancestors()
-                    )
+                    for ancestor in itertools.chain((argument._proxied,), argument._proxied.ancestors())
                 ):
                     try:
                         argument.locals[REVERSED_PROTOCOL_METHOD]
@@ -932,9 +896,7 @@ class BasicChecker(_BasicChecker):
             if isinstance(scope, nodes.ClassDef) and target.name in scope_locals:
                 continue
             if target.name == lhs_name.name:
-                self.add_message(
-                    "self-assigning-variable", args=(target.name,), node=target
-                )
+                self.add_message("self-assigning-variable", args=(target.name,), node=target)
 
     def _check_redeclared_assign_name(self, targets: list[nodes.NodeNG | None]) -> None:
         dummy_variables_rgx = self.linter.config.dummy_variables_rgx
@@ -955,13 +917,9 @@ class BasicChecker(_BasicChecker):
             names = collections.Counter(found_names)
             for name, count in names.most_common():
                 if count > 1:
-                    self.add_message(
-                        "redeclared-assigned-name", args=(name,), node=target
-                    )
+                    self.add_message("redeclared-assigned-name", args=(name,), node=target)
 
-    @utils.only_required_for_messages(
-        "self-assigning-variable", "redeclared-assigned-name"
-    )
+    @utils.only_required_for_messages("self-assigning-variable", "redeclared-assigned-name")
     def visit_assign(self, node: nodes.Assign) -> None:
         self._check_self_assigning_variable(node)
         self._check_redeclared_assign_name(node.targets)
